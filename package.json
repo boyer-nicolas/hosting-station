@@ -1,0 +1,12 @@
+{
+  "name": "hostingstation",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:niwee-productions/hostingstation.git",
+  "author": "Nicolas Boyer <nicolas@niwee.fr>",
+  "license": "MIT",
+  "scripts": {
+    "dev": "cd react && yarn start & cd express && yarn dev & cd strapi && yarn dev",
+    "prep": "cd react && yarn && cd ../express && yarn && cd ../strapi && yarn"
+  }
+}

@@ -1,0 +1,78 @@
+.offcanvas {
+    width           : calc(100% - 20px);
+    position        : fixed;
+    right           : 0px;
+    left            : 0px;
+    bottom          : 0px;
+    top             : 0px;
+    background-color: white;
+    @include border-radius;
+    @include box-shadow;
+
+    .offcanvas-brand {
+        letter-spacing: -.05em !important;
+        font-weight   : bolder !important;
+        font-size     : 2rem;
+    }
+
+    .nav-link,
+    .dropdown a {
+        @include border-radius;
+    }
+}
+
+.h-navbar {
+    position        : fixed;
+    top             : 0px;
+    left            : 0px;
+    z-index         : 1;
+    width           : 280px;
+    height          : 100%;
+    background-color: white;
+    padding         : 1rem;
+    @include border-radius;
+    @include box-shadow;
+}
+
+.offcanvas-header {
+    display        : flex;
+    justify-content: end;
+}
+
+.offcanvas-bottom {
+    height: unset;
+}
+
+.offcanvas-body.h-100 {
+    height: calc(100% - 40px) !important;
+}
+
+.offcanvas-start {
+    width: 280px;
+
+    @include media-breakpoint-down(md) {
+        width: calc(100% - 20px);
+    }
+}
+
+.offcanvas-backdrop.show,
+.offcanvas-backdrop.fade,
+.offcanvas-backdrop,
+.offcanvas-backdrop.hide {
+    @include media-breakpoint-up(md) {
+        display: none;
+    }
+}
+
+body.nav-open {
+    #hostingstation {
+        @include media-breakpoint-up(md) {
+            transform: translateX(310px);
+            width    : calc(100% - 310px);
+        }
+    }
+}
+
+.nav-category {
+    font-size: 0.9rem;
+}

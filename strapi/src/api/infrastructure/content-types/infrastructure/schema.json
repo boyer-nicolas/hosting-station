@@ -1,0 +1,25 @@
+{
+  "kind": "collectionType",
+  "collectionName": "infrastructures",
+  "info": {
+    "singularName": "infrastructure",
+    "pluralName": "infrastructures",
+    "displayName": "Infrastructure",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "giturl": {
+      "type": "string",
+      "regex": "(?:git|ssh|https?|git@[-\\w.]+):(\\/\\/)?(.*?)(\\.git)(\\/?|\\#[-\\d\\w._]+?)$",
+      "required": true
+    },
+    "prettyname": {
+      "type": "string",
+      "required": true
+    }
+  }
+}

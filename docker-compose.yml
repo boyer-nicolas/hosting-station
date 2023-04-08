@@ -1,0 +1,331 @@
+version: "3.9"
+services:
+  builder:
+    image: node:16
+    restart: "no"
+    user: node
+    volumes:
+      - ./react:/app/react
+      - ./express:/app/express
+      - ./strapi:/app/strapi
+    working_dir: /app
+    command: bash -c "cd react && yarn && cd ../express && yarn && cd ../strapi && yarn"
+
+  traefik:
+    image: traefik:latest
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+      - 3000:3000
+    command:
+      - --api=true
+      - --global.checkNewVersion=true
+      - --accessLog.bufferingSize=100
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=web
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.smtp_ssl.address=:465
+      - --entrypoints.smtp_start.address=:587
+      - --entrypoints.pop3_ssl.address=:995
+      - --entrypoints.imap_ssl.address=:993
+      - --entrypoints.console.address=:8080
+      - --entryPoints.web.http.redirections.entryPoint.to=websecure
+      - --entryPoints.web.http.redirections.entryPoint.scheme=https
+      - --entryPoints.web.http.redirections.entrypoint.permanent=true
+      - --certificatesresolvers.letsencrypt.acme.email=global@niwee.fr
+      - --certificatesresolvers.letsencrypt.acme.storage=acme/acme.json
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesResolvers.letsencrypt.acme.dnsChallenge=true
+      - --certificatesResolvers.letsencrypt.acme.dnsChallenge.provider=cloudflare
+      - --log.level=ERROR
+      - --log.filePath=/logs/traefik.log
+      - "traefik.http.routers.traefik.middlewares=maintenance-page@docker"
+    environment:
+      - CF_API_EMAIL=global@niwee.fr
+      - CF_API_KEY=6065bb522068931e092467b6b570c5cc9a4b7
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik.service=api@internal
+      - traefik.http.routers.traefik.rule=Host(`traefik.$MAIN_DOMAIN`)
+      - traefik.http.routers.traefik.entrypoints=console,websecure
+      - traefik.http.routers.traefik.tls.certresolver=letsencrypt
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./rules:/etc/traefik/rules
+      - ./acme:/acme
+      - ./logs:/logs
+    networks:
+      - web
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  maintenance-page:
+    restart: unless-stopped
+    image: nginx:latest
+    volumes:
+      - ./error-pages:/usr/share/nginx/error-pages
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.maintenance-page.loadbalancer.server.port=80"
+      - "traefik.http.routers.maintenance-page.rule=HostRegexp(`{host:.+}`)"
+      - "traefik.http.routers.maintenance-page.priority=1"
+      - "traefik.http.routers.maintenance-page.middlewares=maintenance-page@docker"
+      - "traefik.http.routers.maintenance-page.entrypoints=websecure"
+      - "traefik.http.routers.maintenance-page.tls=true"
+      - "traefik.http.middlewares.maintenance-page.errors.status=400-599"
+      - "traefik.http.middlewares.maintenance-page.errors.service=maintenance-page"
+      - "traefik.http.middlewares.maintenance-page.errors.query=/"
+
+  cloudflare-companion:
+    image: tiredofit/traefik-cloudflare-companion
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    env_file:
+      - .env
+      - .domains.env
+    networks:
+      - web
+    restart: unless-stopped
+
+  express:
+    build: "./express-image"
+    user: node
+    expose:
+      - 5000:5000
+    depends_on:
+      strapi:
+        condition: service_healthy
+      builder:
+        condition: "service_completed_successfully"
+    volumes:
+      - ./express:/app
+      - $HOME/.ssh:/home/node/.ssh
+      - ./projects:/var/opt/projects
+    working_dir: /app
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.apihostingstation.rule=Host(`api.hostingstation.$MAIN_DOMAIN`)"
+      - "traefik.http.routers.apihostingstation.entrypoints=websecure"
+      - "traefik.http.services.apihostingstation.loadbalancer.server.port=5000"
+      - traefik.http.routers.apihostingstation.tls.certresolver=letsencrypt
+    networks:
+      - web
+
+  strapi:
+    image: node:16
+    command: ["yarn", "dev"]
+    env_file:
+      - .strapi.env
+    expose:
+      - 1337:1337
+    depends_on:
+      builder:
+        condition: "service_completed_successfully"
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - ./strapi:/app
+    links:
+      - mariadb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://strapi:1337"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    working_dir: /app
+    restart: unless-stopped
+    networks:
+      - web
+      - db
+
+  react:
+    image: node:16
+    command: ["yarn", "dev"]
+    tty: true
+    expose:
+      - 3000:3000
+    depends_on:
+      builder:
+        condition: "service_completed_successfully"
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - ./react:/app
+    working_dir: /app
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hostingstation.rule=Host(`hostingstation.$MAIN_DOMAIN`)"
+      - "traefik.http.routers.hostingstation.entrypoints=websecure"
+      - "traefik.http.services.hostingstation.loadbalancer.server.port=3000"
+      - traefik.http.routers.hostingstation.tls.certresolver=letsencrypt
+    networks:
+      - web
+
+  maildev:
+    image: djfarrelly/maildev
+    restart: unless-stopped
+    ports:
+      - "1025:80"
+    networks:
+      - web
+
+  mariadb:
+    restart: unless-stopped
+    image: mariadb:latest
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --innodb-file-per-table=1 --skip-innodb-read-only-compressed
+    depends_on:
+      builder:
+        condition: "service_completed_successfully"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysql",
+          "-u",
+          "${MYSQL_USER}",
+          "-p${MYSQL_PASSWORD}",
+          "-e",
+          "SELECT 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "3306:3306"
+    env_file:
+      - ".env"
+    volumes:
+      - "./sql:/docker-entrypoint-initdb.d"
+    tty: true
+    networks:
+      - db
+
+  strapi_middleware:
+    image: nginx:latest
+    restart: unless-stopped
+    depends_on:
+      strapi:
+        condition: service_healthy
+    links:
+      - strapi
+    env_file:
+      - .env
+    networks:
+      - web
+    volumes:
+      - ./strapi.conf:/etc/nginx/templates/default.conf.template
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.strapihostingstation.rule=Host(`strapi.hostingstation.$MAIN_DOMAIN`)"
+      - "traefik.http.routers.strapihostingstation.entrypoints=websecure,smtp_ssl,smtp_start"
+      - "traefik.http.services.strapihostingstation.loadbalancer.server.port=80"
+      - traefik.http.routers.strapihostingstation.tls.certresolver=letsencrypt
+
+  phpmyadmin:
+    restart: unless-stopped
+    image: "phpmyadmin/phpmyadmin:latest"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      - USER_ID=${USER_ID}
+    env_file:
+      - ".env"
+    links:
+      - mariadb
+    volumes:
+      - "pma:/usr/share/webapps/phpmyadmin"
+      - ./pma/config.inc.php:/etc/phpmyadmin/config.inc.php
+    tty: true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pma.rule=Host(`pma.$MAIN_DOMAIN`)"
+      - "traefik.http.routers.pma.entrypoints=websecure"
+      - "traefik.http.services.pma.loadbalancer.server.port=80"
+      - traefik.http.routers.pma.tls.certresolver=letsencrypt
+    networks:
+      - web
+      - db
+
+  filebrowser:
+    image: filebrowser/filebrowser
+    restart: unless-stopped
+    user: 1000:1000
+    env_file:
+      - .env
+    volumes:
+      - ./projects:/srv
+      - .filebrowser.json:/.filebrowser.json
+      - ./filebrowser.db:/database.db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.files.rule=Host(`files.$MAIN_DOMAIN`)"
+      - "traefik.http.routers.files.entrypoints=websecure"
+      - "traefik.http.services.files.loadbalancer.server.port=80"
+      - traefik.http.routers.files.tls.certresolver=letsencrypt
+    networks:
+      - web
+
+  portainer:
+    restart: unless-stopped
+    image: portainer/portainer-ce
+    env_file:
+      - .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/data/portainer:/data
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.$MAIN_DOMAIN`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+
+  kuma:
+    image: "louislam/uptime-kuma"
+    restart: unless-stopped
+    volumes:
+      - ./uptime:/app/data
+    env_file:
+      - .env
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.uptime.rule=Host(`uptime.$MAIN_DOMAIN`)"
+      - "traefik.http.routers.uptime.entrypoints=websecure"
+      - "traefik.http.services.uptime.loadbalancer.server.port=3001"
+      - traefik.http.routers.uptime.tls.certresolver=letsencrypt
+
+  cron:
+    image: registry.gitlab.com/niwee-productions/docker-images/cron:latest
+    environment:
+      - "USER_ID=${USER_ID}"
+    depends_on:
+      - mariadb
+    env_file:
+      - ".env"
+    volumes:
+      - "./sql:/sql"
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  pma:
+  db:
+
+networks:
+  web:
+    external: true
+  db:
+    external: true

@@ -1,0 +1,20 @@
+http:
+  routers:
+    cockpit:
+      rule: "Host(`cockpit.byniwee.cloud`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - simple_auth
+      service: cockpit
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    cockpit:
+      entryPoints:
+        - "websecure"
+      rule: "Host(`cockpit.byniwee.cloud`)"
+      tls:
+        certResolver: letsencrypt
+      service: cockpit

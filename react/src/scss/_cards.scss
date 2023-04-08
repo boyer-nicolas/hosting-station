@@ -1,0 +1,42 @@
+#hostingstation {
+    .card {
+        border: none;
+        @include box-shadow;
+        @include border-radius;
+        padding: 1rem;
+
+        .card-dropdown {
+            position: absolute;
+            right   : 0px;
+            top     : 10px;
+
+            &:hover {
+                button {
+                    box-shadow: none;
+                    transform : none;
+                }
+            }
+
+            button {
+                background: none;
+                border    : none;
+                color     : black;
+
+                &:hover,
+                &:focus {
+                    box-shadow: none;
+                    transform : none;
+                }
+
+                svg {
+                    font-size: 22px;
+                    fill     : black;
+                }
+
+                &:after {
+                    display: none;
+                }
+            }
+        }
+    }
+}

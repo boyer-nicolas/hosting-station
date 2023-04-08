@@ -1,0 +1,25 @@
+#hostingstation {
+    .btn {
+        border-radius: 8px;
+        transition   : all 0.3s ease-in-out;
+        font-weight  : 600;
+
+        &:hover {
+            box-shadow: rgba($secondary, 0.4) -5px 5px, rgba($secondary, 0.3) -10px 10px, rgba($secondary, 0.2) -15px 15px;
+            transform : translateY(-5px);
+            color     : whitesmoke;
+        }
+    }
+
+    .btn-primary {
+        color: #fff;
+
+        &:hover {
+            color: whitesmoke;
+        }
+    }
+
+    .btn.loading {
+        width: auto;
+    }
+}
